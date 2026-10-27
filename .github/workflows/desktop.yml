@@ -1,0 +1,71 @@
+# Builds the stand-alone PDFPlume app for macOS, Windows and Linux.
+# Run it from the Actions tab ("Run workflow"), or push a tag like v2.1.0 to
+# also attach the downloads to a GitHub release.
+name: Desktop app
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14        # Apple silicon
+            name: macos-arm64
+          - os: macos-13        # Intel
+            name: macos-x64
+          - os: windows-latest
+            name: windows-x64
+          - os: ubuntu-22.04
+            name: linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+      - name: Run the tests
+        continue-on-error: ${{ runner.os != 'Linux' }}  # still build the app if a test trips over the OS
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m pytest -q
+      - name: Build
+        run: pyinstaller --noconfirm --clean packaging/pdfplume.spec
+      - name: Smoke test
+        shell: bash
+        run: |
+          if [ -d dist/PDFPlume.app ]; then BIN=dist/PDFPlume.app/Contents/MacOS/PDFPlume; else BIN=dist/PDFPlume/PDFPlume; fi
+          PDFPLUME_PORT=8799 PDFPLUME_DATA_DIR="$RUNNER_TEMP/pdfplume" "$BIN" --no-browser --no-window &
+          for i in $(seq 1 60); do curl -fs http://127.0.0.1:8799/api/health && break; sleep 1; done
+          curl -fs http://127.0.0.1:8799/api/health
+      - name: Package
+        shell: bash
+        run: |
+          cd dist
+          if [ -d PDFPlume.app ]; then
+            ditto -c -k --keepParent PDFPlume.app "../PDFPlume-${{ matrix.name }}.zip"
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            7z a -tzip "../PDFPlume-${{ matrix.name }}.zip" PDFPlume
+          else
+            tar -czf "../PDFPlume-${{ matrix.name }}.tar.gz" PDFPlume
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PDFPlume-${{ matrix.name }}
+          path: PDFPlume-${{ matrix.name }}.*
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: PDFPlume-${{ matrix.name }}.*

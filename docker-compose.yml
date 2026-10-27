@@ -1,0 +1,18 @@
+services:
+  pdfplume:
+    build: .
+    image: pdfplume:latest
+    ports:
+      - "127.0.0.1:8765:8765"   # only reachable from this computer
+    environment:
+      - PDFPLUME_FILE_TTL_MINUTES=120
+      # - LIBRETRANSLATE_URL=http://libretranslate:5000
+      # - OLLAMA_URL=http://host.docker.internal:11434   # Ollama running on this computer
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - pdfplume-data:/data        # keeps your signing certificates between restarts
+    restart: unless-stopped
+
+volumes:
+  pdfplume-data:

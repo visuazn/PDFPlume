@@ -1,0 +1,17 @@
+# Core (pure pip, no system packages needed)
+Flask>=3.0
+waitress>=3.0
+PyMuPDF>=1.25
+pikepdf>=9.0
+Pillow>=10.0
+pdf2docx>=0.5.8
+python-docx>=1.1
+python-pptx>=1.0
+openpyxl>=3.1
+mammoth>=1.8
+pillow-heif>=0.18
+pymupdf4llm>=0.2
+pyHanko>=0.25
+cryptography>=42
+opencv-python-headless>=4.8
+numpy>=1.26

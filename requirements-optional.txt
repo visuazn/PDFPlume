@@ -1,0 +1,6 @@
+# Optional extras - install with: pip install -r requirements-optional.txt
+# Best HTML to PDF (full CSS/JS, page sizes). Afterwards run: python -m playwright install chromium
+# (not needed if Google Chrome / Chromium / Edge is installed - it is used automatically)
+playwright>=1.40
+# Offline translation for "Translate PDF" (large download: pulls in PyTorch).
+# argostranslate>=1.9
