@@ -419,7 +419,15 @@ def create_app(storage=None, jobs=None):
                                       "Run OCR PDF on it first, then ask again.",
                             "sources": [], "engine": "none", "needs_ocr": True})
         history = body.get("history") if isinstance(body.get("history"), list) else []
-        return jsonify(chat.answer(index, question, history))
+        result = chat.answer(index, question, history)
+        if result.get("quotes"):
+            with MUPDF_LOCK:
+                doc = open_doc(meta)
+                try:
+                    chat.locate_quotes(doc, result["quotes"])
+                finally:
+                    doc.close()
+        return jsonify(result)
 
     @app.get("/api/files/<file_id>/text")
     def page_text(file_id):

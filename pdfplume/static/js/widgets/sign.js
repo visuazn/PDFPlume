@@ -293,8 +293,8 @@ export function create(ctx) {
       ctx.refresh();
     } });
     box.append(h('div', { class: 'opt-title', style: 'margin-top:22px' }, 'Digital signature'),
-      h('label', { class: 'check-row' }, toggle, h('span', {}, 'Also sign with a certificate',
-        h('span', { class: 'help', style: 'display:block' }, 'Proves who signed and that nothing changed afterwards. PDF viewers show it in their signature panel.'))));
+      h('div', { class: 'opt' }, h('label', { class: 'check-row' }, toggle, h('span', {}, 'Also sign with a certificate',
+        h('span', { class: 'help', style: 'display:block' }, 'Proves who signed and that nothing changed afterwards. PDF viewers show it in their signature panel.')))));
     if (!st.digital) return box;
     if (!st.certs) { box.append(h('p', { class: 'muted' }, 'Loading certificates…')); return box; }
     const addBtns = h('div', { class: 'row', style: 'gap:8px;margin-top:8px' },

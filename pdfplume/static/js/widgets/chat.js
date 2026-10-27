@@ -42,19 +42,19 @@ export function create(ctx) {
     scroll.append(viewer);
   }
 
-  function jump(page, rect = null) {
+  /** Scroll to a page and highlight ``rects`` (one [x0, y0, x1, y1] per line, fractions of the page). */
+  function jump(page, rects = null) {
     const v = views[page];
     if (!v) return;
-    v.layer.querySelectorAll('.chat-hl').forEach((x) => x.remove());
-    views.forEach((x) => x.page.classList.remove('cited'));
-    if (rect) {
-      const [x0, y0, x1, y1] = rect;
-      const hl = h('div', { class: 'chat-hl', style: { left: `${x0 * 100}%`, top: `${y0 * 100}%`, width: `${(x1 - x0) * 100}%`, height: `${(y1 - y0) * 100}%` } });
-      v.layer.append(hl);
-      setTimeout(() => hl.classList.add('fade'), 2600);
+    views.forEach((x) => { x.layer.querySelectorAll('.chat-hl').forEach((el) => el.remove()); x.page.classList.remove('cited'); });
+    if (rects && rects.length) {
+      const marks = rects.map(([x0, y0, x1, y1]) => h('div', { class: `chat-hl${rects.length > 1 ? ' line' : ''}`,
+        style: { left: `${x0 * 100}%`, top: `${y0 * 100}%`, width: `${(x1 - x0) * 100}%`, height: `${(y1 - y0) * 100}%` } }));
+      v.layer.append(...marks);
+      setTimeout(() => marks.forEach((m) => m.classList.add('fade')), 2600);
       const r = v.page.getBoundingClientRect();
       const s = scroll.getBoundingClientRect();
-      scroll.scrollBy({ top: r.top - s.top + y0 * r.height - 80, behavior: 'smooth' });
+      scroll.scrollBy({ top: r.top - s.top + rects[0][1] * r.height - 120, behavior: 'smooth' });
     } else {
       v.page.classList.add('cited');
       setTimeout(() => v.page.classList.remove('cited'), 1600);
@@ -63,14 +63,21 @@ export function create(ctx) {
   }
 
   // ---------------------------------------------------------------- chat
-  function citeChip(page, sources) {
+  function citeChip(page, sources, quote) {
+    const exact = quote && quote.page === page - 1 && quote.rects ? quote : null;
     const src = sources.find((s) => s.page === page - 1);
-    return h('button', { type: 'button', class: 'cite', title: src ? src.text : `Go to page ${page}`, onclick: () => jump(page - 1, src && src.rect) }, `p. ${page}`);
+    const rects = exact ? exact.rects : src ? [src.rect] : null;
+    return h('button', { type: 'button', class: 'cite', title: exact ? 'Show this sentence in the document' : src ? src.text : `Go to page ${page}`,
+      onclick: () => jump(page - 1, rects) }, `p. ${page}`);
   }
 
-  function richText(text, sources) {
+  // Offline answers are bullets of quotes, in the same order as ``quotes``.
+  function richText(text, sources, quotes = []) {
     const el = h('div', { class: 'chat-text' });
+    let bullet = -1;
     for (const line of String(text).split('\n')) {
+      if (/^\s*[•*-]\s+/.test(line)) bullet++;
+      const quote = bullet >= 0 ? quotes[bullet] : null;
       const p = h('p', { class: /^\s*[•*-]\s+/.test(line) ? 'li' : '' });
       let last = 0;
       const clean = line.replace(/^\s*[•*-]\s+/, '');
@@ -78,7 +85,7 @@ export function create(ctx) {
         p.append(clean.slice(last, m.index));
         const a = Number(m[1] || m[3]);
         const b = m[2] ? Number(m[2]) : null;
-        if (a >= 1 && a <= st.pages.length) p.append(citeChip(a, sources)); else p.append(m[0]);
+        if (a >= 1 && a <= st.pages.length) p.append(citeChip(a, sources, quote)); else p.append(m[0]);
         if (b && b >= 1 && b <= st.pages.length && b !== a) p.append(citeChip(b, sources));
         last = m.index + m[0].length;
       }
@@ -92,19 +99,19 @@ export function create(ctx) {
     if (m.role === 'user') return h('div', { class: 'msg user' }, h('div', { class: 'bubble' }, m.content));
     if (m.pending) return h('div', { class: 'msg bot' }, h('div', { class: 'bubble typing', 'aria-label': 'Thinking' }, h('i'), h('i'), h('i')));
     const box = h('div', { class: `msg bot${m.error ? ' error' : ''}` });
-    const bubble = h('div', { class: 'bubble' }, richText(m.content, m.sources || []));
+    const bubble = h('div', { class: 'bubble' }, richText(m.content, m.sources || [], m.quotes || []));
     if (m.engine === 'offline' && !m.error && m.sources && m.sources.length) {
       bubble.prepend(h('div', { class: 'msg-kicker' }, 'Closest passages in the document'));
     }
     box.append(bubble);
     if (m.warning) box.append(h('div', { class: 'msg-note' }, m.warning));
-    if (m.sources && m.sources.length) {
+    if (m.sources && m.sources.length && !(m.quotes && m.quotes.length)) { // quotes already show where they come from
       const list = h('div', { class: 'sources' }, h('span', { class: 'lbl' }, 'Sources'));
       const seen = new Set();
       for (const s of m.sources) {
         if (seen.has(s.page)) continue;
         seen.add(s.page);
-        list.append(h('button', { type: 'button', class: 'src', title: s.text, onclick: () => jump(s.page, s.rect) },
+        list.append(h('button', { type: 'button', class: 'src', title: s.text, onclick: () => jump(s.page, [s.rect]) },
           h('b', {}, `p. ${s.page + 1}`), h('span', {}, s.text.slice(0, 90))));
       }
       box.append(list);
@@ -145,7 +152,7 @@ export function create(ctx) {
         body: JSON.stringify({ question, history }), signal: st.abort.signal });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-      Object.assign(pending, { pending: false, content: data.answer, sources: data.sources, engine: data.engine, warning: data.warning });
+      Object.assign(pending, { pending: false, content: data.answer, sources: data.sources, quotes: data.quotes, engine: data.engine, warning: data.warning });
     } catch (e) {
       if (e.name === 'AbortError') st.messages.splice(st.messages.indexOf(pending), 1);
       else Object.assign(pending, { pending: false, error: true, content: e.message });

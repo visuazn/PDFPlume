@@ -101,7 +101,9 @@ function summaryPanel(result, state) {
     panel.append(h('h3', {}, 'Summary'), body);
   } else {
     text = points.map((p) => `• ${p.text}${p.page ? ` (p. ${p.page})` : ''}`).join('\n');
-    panel.append(h('h3', {}, 'Key points'), pointList(points.filter((p) => p.page)), points.some((p) => !p.page) ? h('ul', {}, ...points.filter((p) => !p.page).map((p) => h('li', {}, p.text))) : null);
+    panel.append(h('h3', {}, 'Key points'), pointList(points.filter((p) => p.page)));
+    const unpaged = points.filter((p) => !p.page);
+    if (unpaged.length) panel.append(h('ul', {}, ...unpaged.map((p) => h('li', {}, p.text))));
   }
   if (x.keywords && x.keywords.length) {
     panel.append(h('h3', { style: 'margin-top:18px' }, 'Key terms'), h('div', { class: 'chip-list' }, ...x.keywords.map((k) => h('span', { class: 'chip', style: 'padding-right:10px' }, k))));

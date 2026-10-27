@@ -422,7 +422,7 @@ export const TOOLS = [
   {
     slug: 'edit_pdf', name: 'Edit PDF', cat: 'edit', accept: 'pdf',
     multiple: false, workspace: 'editor',
-    desc: 'Add text, images, shapes and drawings to any page.',
+    desc: 'Change the existing text, or add text, images, shapes and drawings.',
     action: 'Save PDF', done: 'Changes saved',
     next: ['compress_pdf', 'sign_pdf', 'protect_pdf', 'merge_pdf'],
   },

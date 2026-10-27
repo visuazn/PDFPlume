@@ -27,6 +27,7 @@ def _lines(doc):
                     "bold": all(s["flags"] & 16 or "bold" in s["font"].lower() for s in spans),
                     "chars": sum(len(s["text"]) for s in spans),
                     "y": line["bbox"][1],
+                    "x0": line["bbox"][0], "x1": line["bbox"][2], "y1": line["bbox"][3],
                     "margin": not (0.07 < line["bbox"][1] / (page.rect.height or 1) < 0.93),
                 }
 
@@ -49,6 +50,17 @@ def detect_headings(doc, max_items=300):
     repeats = Counter(key(ln) for ln in lines)
     many = max(3, doc.page_count * 0.3)
 
+    # Lines that share their baseline with another, separate line are table cells.
+    rows = {}
+    for ln in lines:
+        rows.setdefault((ln["page"], round(ln["y1"])), []).append(ln)
+
+    def in_table_row(ln):
+        for key in ((ln["page"], round(ln["y1"]) + d) for d in (-1, 0, 1)):
+            if any(o is not ln and (o["x0"] > ln["x1"] + 4 or o["x1"] < ln["x0"] - 4) for o in rows.get(key, ())):
+                return True
+        return False
+
     cands = []
     for ln in lines:
         text = ln["text"]
@@ -61,6 +73,8 @@ def detect_headings(doc, max_items=300):
         if text.endswith((",", ";")) or (not bigger and text.endswith(".") and len(words) > 6):
             continue
         if repeats[key(ln)] > many and doc.page_count > 2:
+            continue
+        if not bigger and in_table_row(ln):  # bold table headers and totals are not headings
             continue
         prev = cands[-1] if cands else None
         if (prev and prev["page"] == ln["page"] and prev["block"] == ln["block"]

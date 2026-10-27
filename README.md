@@ -9,6 +9,41 @@ away with *Delete*).
 
 ![tools](https://img.shields.io/badge/tools-39-5b5bd6) ![python](https://img.shields.io/badge/python-3.10%2B-blue) ![offline](https://img.shields.io/badge/works-offline-2a9d61) ![license](https://img.shields.io/badge/license-AGPL--3.0-5b6577)
 
+![PDFPlume home screen: drop files, quick actions, all 39 tools and your recent results](docs/screenshots/home.png)
+
+## A quick look
+
+<table>
+  <tr>
+    <td><img width="420" src="docs/screenshots/edit.png" alt="Edit PDF: the heading of a report is being retyped in place, with a highlighted sentence below"><br>
+      <b>Edit the PDF's own text</b> – click any line to retype or delete it, then add highlights, shapes, images or drawings.</td>
+    <td><img width="420" src="docs/screenshots/chat.png" alt="Chat with PDF: answers quote the report, with the cited sentence highlighted on the page"><br>
+      <b>Chat with your PDF</b> – every answer cites its page; click the citation to see the exact sentence highlighted.</td>
+  </tr>
+  <tr>
+    <td><img width="420" src="docs/screenshots/sign.png" alt="Sign PDF: a handwritten signature and date on a proposal, with certificate signing options"><br>
+      <b>Sign</b> – type, draw or upload a signature, and optionally add a real digital signature with your own certificate.</td>
+    <td><img width="420" src="docs/screenshots/form.png" alt="Fill PDF form: a membership application filled in directly on the page, with a progress meter"><br>
+      <b>Fill in forms</b> – type straight into the form's fields, tick boxes and pick options; flatten it when you're done.</td>
+  </tr>
+  <tr>
+    <td><img width="420" src="docs/screenshots/summary.png" alt="AI Summarizer: key points of an annual report, each with a page reference, and a section-by-section summary"><br>
+      <b>Summarize</b> – key points with page references, key terms and a section-by-section summary.</td>
+    <td><img width="420" src="docs/screenshots/scan.png" alt="Scan to PDF: the corners of a photographed letter are adjusted before it is straightened"><br>
+      <b>Scan to PDF</b> – PDFPlume finds the page in your photo and straightens it; drag the corners to fine-tune.</td>
+  </tr>
+  <tr>
+    <td><img width="420" src="docs/screenshots/organize.png" alt="Organize PDF: pages from four documents in one grid, one of them rotated"><br>
+      <b>Organize pages</b> – drag pages from several PDFs into order, rotate, duplicate, delete or add blank pages.</td>
+    <td><img width="420" src="docs/screenshots/dark.png" alt="Chat with PDF in dark mode"><br>
+      <b>Light or dark</b> – follows your system, or pick one in the sidebar.</td>
+  </tr>
+</table>
+
+![PDFPlume on a phone: the home screen, merging three PDFs and chatting with a report](docs/screenshots/mobile.png)
+
+<sub>Screenshots use fictional sample documents.</sub>
+
 ## Using PDFPlume
 
 * **Start from your files** – drop any PDF, Office document, image or HTML file

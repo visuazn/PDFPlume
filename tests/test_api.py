@@ -198,6 +198,9 @@ def test_chat_endpoints(client, samples):
     assert info["llm"]["available"] is False
     res = client.post(f"/api/files/{meta['id']}/ask", json={"question": "How do I protect sensitive content?"}).json
     assert "[p. " in res["answer"] and res["sources"]
+    quote = res["quotes"][0]  # each quoted sentence comes with its position, line by line
+    assert "protect" in quote["text"].lower() and quote["rects"]
+    assert all(0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1 for x0, y0, x1, y1 in quote["rects"])
     assert client.post(f"/api/files/{meta['id']}/ask", json={"question": " "}).status_code == 400
     scan = upload(client, samples["scanned"])
     res = client.post(f"/api/files/{scan['id']}/ask", json={"question": "anything"}).json

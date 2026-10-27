@@ -906,3 +906,32 @@ def test_visual_sign_keeps_digital_signature(run_tool, samples, tmp_path):
     sigs = verify_pdf(out2 / ok(res2)["file"], trusted=store.trusted())
     assert len(sigs) == 1 and sigs[0]["intact"] and not sigs[0]["covers_whole_file"]
     assert "stay valid" in res2["extra"]["note"]
+
+
+def _report(tmp_path):
+    from pdfplume.tools.convert_to import render_html
+    html = ("<h1>Studio report</h1><p>The studio has 42 people in two cities. We also changed how we work.</p>"
+            "<h2>Financial results</h2><p>Revenue grew by 38 percent to 10.6 million euros this year.</p>"
+            "<table><tr><th>Practice</th><th>2024</th><th>2025</th></tr><tr><td>Products</td><td>4.9</td><td>6.5</td></tr>"
+            "<tr><td><b>Total</b></td><td><b>7.7</b></td><td><b>10.6</b></td></tr></table>"
+            "<h2>Sustainability</h2><p>Both studios run on renewable electricity and travel less.</p>"
+            "<h2>Outlook</h2><p>We expect further growth and will hire eight more people.</p>")
+    path = tmp_path / "report.pdf"
+    render_html(html, path)
+    return path
+
+
+def test_headings_skip_table_rows(tmp_path):
+    from pdfplume.structure import detect_headings
+    titles = [h["title"] for h in detect_headings(pdf(_report(tmp_path)))]
+    assert titles == ["Studio report", "Financial results", "Sustainability", "Outlook"]
+
+
+def test_chat_understands_question_wording(tmp_path):
+    from pdfplume import chat
+    index = chat.build_index(pdf(_report(tmp_path)))
+    assert chat.suggestions(index) == ["Summarize this document", "What does it say about financial results?",
+                                       "What does it say about sustainability?", "What does it say about outlook?"]
+    assert chat.answer(index, "How much did revenue grow?")["answer"].startswith("• Revenue grew by 38 percent")
+    assert "42 people" in chat.answer(index, "How many people work at the studio?")["answer"].split("\n")[0]
+    assert "renewable" in chat.answer(index, "Is the studio sustainable?")["answer"]

@@ -31,6 +31,7 @@ ourselves out over own same she should so some such than that the their theirs t
 themselves then there these they this those through to too under until up very was we were
 what when where which while who whom why will with would you your yours yourself yourselves
 may might must shall upon within without however therefore thus also et al use used using one
+every across including whose whether although though yet still even
 two three four five first second new like get got make made many much via per vs etc e g i e
 le la les des un une et est en du de dans pour que qui sur pas plus par au aux ce cette
 el los las del y en que por con para una es se lo como más pero sus al
