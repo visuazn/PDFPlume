@@ -2,8 +2,8 @@
 // empty -> work -> processing -> done, instead of swapping whole pages.
 import { api, capabilities, humanSize } from './api.js';
 import { ICONS, toolIcon } from './icons.js';
-import { defaultsFor, renderOptions } from './options.js';
-import { CAT_MAP, KIND_COLOR, TOOL_MAP } from './tools.js';
+import { defaultsFor, renderOptions, showOptionError, validateOptions } from './options.js';
+import { KIND_COLOR, TOOL_MAP } from './tools.js';
 import { addRecent, esc, getPins, h, makeSortable, modKey, modal, moveItem, promptPassword, renderShell, setTitle, toast, togglePin } from './ui.js';
 import { renderResultCanvas, renderResultInspector } from './result.js';
 
@@ -14,10 +14,9 @@ const state = {
   files: [],
   options: {},
   caps: {},
-  view: 'empty', // empty | work | processing | done | error
+  view: 'empty', // empty | work | processing | done
   pending: new Set(),
   result: null,
-  error: null,
 };
 let widget = null;
 let widgetReady = null;
@@ -166,8 +165,7 @@ function buildLayout(page) {
     pin.title = on ? 'Unpin from sidebar' : 'Pin to sidebar';
     toast(on ? `${tool.name} pinned to the sidebar` : `${tool.name} unpinned`);
   });
-  page.append(h('div', { class: 'tool-head', html: toolIcon(tool, 'lg') },
-    h('div', { class: 'th-text' }, h('h1', {}, tool.name), h('p', {}, tool.desc)), pin));
+  document.getElementById('top-actions').append(pin);
   inner = h('div', { class: 'canvas-inner' });
   canvas = h('section', { class: 'canvas', 'aria-label': 'Workspace' }, inner);
   inspHead = h('div', { class: 'insp-head' });
@@ -192,10 +190,22 @@ function refresh() {
 function renderCanvas() {
   canvas.classList.toggle('flush', state.view === 'work' && !!widget.flush);
   canvas.querySelector('.overlay')?.remove();
+  canvas.querySelector('.canvas-alert')?.remove();
   if (state.view === 'empty') renderEmpty();
   else if (state.view === 'work') { inner.innerHTML = ''; widget.render(inner); }
   else if (state.view === 'done') { inner.innerHTML = ''; renderResultCanvas(inner, { tool, result: state.result, state }); }
-  else if (state.view === 'error') renderError();
+}
+
+/** A failed job keeps the workspace as it was; the reason is shown above it. */
+function showError(message) {
+  canvas.querySelector('.canvas-alert')?.remove();
+  if (!message) return;
+  const alert = h('div', { class: 'canvas-alert', role: 'alert' },
+    h('span', { class: 'ca-ico', html: ICONS.alert }),
+    h('div', { class: 'ca-text' }, h('b', {}, 'That didn’t work'), h('span', {}, message)),
+    h('button', { type: 'button', class: 'btn sm', onclick: () => run() }, 'Try again'),
+    h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Dismiss', title: 'Dismiss', html: ICONS.x, onclick: () => alert.remove() }));
+  canvas.append(alert);
 }
 
 // ------------------------------------------------------------- empty state
@@ -237,20 +247,12 @@ function renderEmpty() {
       h('div', { class: 'actions-row' },
         h('button', { type: 'button', class: 'btn primary lg', id: 'choose-btn', onclick: () => openPicker(), html: `${ICONS.upload} Choose file${tool.multiple ? 's' : ''}` }),
         h('button', { type: 'button', class: 'btn lg', onclick: addFromUrl, html: `${ICONS.link} From URL` })),
+      h('p', { class: 'dz-hint', html: `You can also paste a copied file or screenshot with <kbd>${modKey}</kbd> <kbd>V</kbd>` }),
       h('div', { class: 'formats' }, ...tool.acceptInfo.ext.split(',').slice(0, 7).map((e) => h('span', { class: 'fmt' }, e.slice(1).toUpperCase()))));
   }
   const blocking = engineNotes().filter(([k]) => k === 'warn');
   for (const [k, n] of blocking) zone.append(callout(k, n));
   inner.append(zone);
-}
-
-function renderError() {
-  inner.innerHTML = '';
-  inner.append(h('div', { class: 'error-card' },
-    h('div', { class: 'eico', html: ICONS.alert }), h('h3', {}, 'That didn’t work'), h('p', {}, state.error || 'Unknown error'),
-    h('div', { class: 'row' },
-      h('button', { type: 'button', class: 'btn', onclick: () => setView(state.files.length || widget.startInWork ? 'work' : 'empty'), html: `${ICONS.back} Back to files` }),
-      h('button', { type: 'button', class: 'btn primary', onclick: () => run() }, 'Try again'))));
 }
 
 function addFromUrl() {
@@ -424,10 +426,12 @@ function filesWidget() {
 function previewBox() {
   const f = ctx.ready().find((x) => x.kind === 'pdf' && x.width);
   if (!f) return null;
-  const W = 280;
+  // As large as the canvas allows, so small text in the preview is readable.
+  const room = Math.max(240, (inner?.clientWidth || 700) - 40);
+  const W = Math.round(Math.min(440, room, (window.innerHeight * 0.52) * (f.width / f.height)));
   const scale = W / f.width;
   const box = h('div', { class: 'preview-page', style: { width: `${W}px`, height: `${f.height * scale}px` } },
-    h('img', { src: thumbUrl(f, 0, 600), style: { width: '100%', height: '100%', boxShadow: 'var(--shadow-md)' } }));
+    h('img', { src: thumbUrl(f, 0, 1000), style: { width: '100%', height: '100%', boxShadow: 'var(--shadow-md)' } }));
   const o = state.options;
   const family = { helvetica: 'Helvetica, Arial, sans-serif', times: '"Times New Roman", Times, serif', courier: '"Courier New", Courier, monospace' }[o.font] || 'Arial';
   const place = (el, pos, margin) => {
@@ -502,6 +506,11 @@ async function run() {
     const err = widget.validate();
     if (err) { toast(err, 'error'); return; }
   }
+  if (!widget.sidebar) {
+    const bad = validateOptions(tool.options, state.options);
+    if (bad) { showOptionError(inspBody, bad.key, bad.message); return; }
+  }
+  showError(null);
   const payload = widget.payload();
   if (state.view !== 'work') setView('work');
   state.view = 'processing';
@@ -529,8 +538,10 @@ async function run() {
       setView('work');
       return;
     }
-    state.error = e.message;
-    setView('error');
+    canvas.querySelector('.overlay')?.remove();
+    state.view = 'work';
+    renderInspector();
+    showError(e.message);
   } finally {
     state.jobId = null;
   }
@@ -585,8 +596,14 @@ document.addEventListener('paste', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.view === 'processing') { cancelJob(); return; }
   if (!(e.metaKey || e.ctrlKey)) return;
-  if (e.key === 'Enter' && ['work', 'empty', 'error'].includes(state.view) && !runBtn.disabled) { e.preventDefault(); run(); }
+  if (e.key === 'Enter' && ['work', 'empty'].includes(state.view) && !runBtn.disabled) { e.preventDefault(); run(); }
   else if (e.key.toLowerCase() === 'o' && ['work', 'empty'].includes(state.view)) { e.preventDefault(); openPicker(); }
+});
+
+// Leaving with unsaved edits (or while a job runs) asks first.
+window.addEventListener('beforeunload', (e) => {
+  const unsaved = state.view === 'processing' || (state.view === 'work' && widget && widget.dirty && widget.dirty());
+  if (unsaved) { e.preventDefault(); e.returnValue = ''; }
 });
 
 // ------------------------------------------------------------------- init
@@ -625,8 +642,7 @@ async function preload(params) {
 
 async function init() {
   if (!tool) { location.replace('/'); return; }
-  const cat = CAT_MAP[tool.cat];
-  const page = renderShell({ active: slug, crumbs: [{ label: 'Tools', href: '/' }, { label: cat.name, href: '/' }, { label: tool.name }] });
+  const page = renderShell({ active: slug, tool });
   setTitle(tool.name);
   buildLayout(page);
   state.options = defaultsFor(tool.options);

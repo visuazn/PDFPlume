@@ -55,7 +55,14 @@ away with *Delete*).
   right, and the result appears in the same place. <kbd>⌘ ↵</kbd> runs the tool,
   <kbd>⌘ O</kbd> adds files.
 * **Chain tools** – every result offers *Continue with this file* (merge, then
-  compress, then protect …).
+  compress, then protect …). Look through every page of the result before you
+  download it.
+* **Document viewers** (Edit, Sign, Redact, Fill form, Chat) have page and zoom
+  controls: <kbd>+</kbd> / <kbd>-</kbd> to zoom, <kbd>0</kbd> to fit the width,
+  <kbd>Ctrl</kbd> + scroll to zoom with the mouse.
+* **Mistakes are easy to fix** – a missing setting is pointed out right where it
+  is, a failed task keeps your files and settings, and PDFPlume asks before you
+  leave a page with unsaved edits.
 * **Pin your favourites** with the star next to a tool's name; they stay at the
   top of the sidebar.
 * **Recent results** for the last two hours are listed on the home screen.

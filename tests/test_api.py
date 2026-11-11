@@ -258,3 +258,14 @@ def test_certificate_endpoints(client, samples):
     assert res.status_code == 400
     assert client.delete(f"/api/certificates/{info['id']}").json == {"ok": True}
     assert client.get("/api/certificates").json["certificates"] == []
+
+
+def test_result_preview_pages(client, samples):
+    meta = upload(client, samples["pdf"])
+    job_id = client.post("/api/process/rotate_pdf", json={"files": [{"id": meta["id"]}], "options": {"angle": 90}}).json["job_id"]
+    st = wait_job(client, job_id)
+    assert st["outputs"][0]["pages"] == 5  # lets the result view offer "Page 1 of 5"
+    first = client.get(f"/api/jobs/{job_id}/thumb?w=200")
+    third = client.get(f"/api/jobs/{job_id}/thumb?w=200&page=2")
+    assert first.status_code == third.status_code == 200 and first.data != third.data
+    assert client.get(f"/api/jobs/{job_id}/thumb?w=200&page=5").status_code == 404

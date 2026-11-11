@@ -1,6 +1,7 @@
 // Redact PDF: mark areas by hand and/or search words and patterns.
 import { ICONS } from '../icons.js';
 import { debounce, esc, h, toast } from '../ui.js';
+import { viewerControls } from './common.js';
 import { EditorCore } from './editor-core.js';
 
 const PATTERNS = [
@@ -19,6 +20,7 @@ export function create(ctx) {
   });
   core.tool = 'area';
 
+  const view = viewerControls({ scroll: () => core.scroll, zoom: () => core.zoom, setZoom: (z) => core.setZoom(z) });
   const file = () => ctx.ready()[0];
 
   const refreshMatches = debounce(async () => {
@@ -103,17 +105,17 @@ export function create(ctx) {
       area.innerHTML = '';
       const bar = h('div', { class: 'editor-bar' }, h('span', { class: 'muted', style: 'padding:0 8px;font-size:14px' }, 'Drag over the page to mark areas · search matches are highlighted'),
         h('span', { style: 'flex:1' }),
-        h('button', { type: 'button', class: 'tool-btn', onclick: () => core.undo(), html: `${ICONS.undo}<span>Undo</span>` }),
-        h('button', { type: 'button', class: 'tool-btn', onclick: () => core.setZoom(core.zoom / 1.2), html: `${ICONS.zoomOut}<span>Zoom</span>` }),
-        h('button', { type: 'button', class: 'tool-btn', onclick: () => core.setZoom(core.zoom * 1.2), html: `${ICONS.zoomIn}<span>Zoom</span>` }));
+        h('button', { type: 'button', class: 'tool-btn', onclick: () => core.undo(), html: `${ICONS.undo}<span>Undo</span>` }));
       const scroll = h('div', { class: 'editor-scroll' });
       area.append(h('div', { class: 'editor-shell' }, bar, scroll));
       core.mount(scroll);
+      view.attach();
       core.setTool(core.tool);
       applyOverlays();
     },
     sidebar(body) { sideBody = body; renderSide(); },
     onFiles() { core.file = null; st.matches = []; },
+    dirty: () => core.elements.length > 0 || st.terms.length > 0 || st.patterns.size > 0,
     validate() { return core.elements.length || st.terms.length || st.patterns.size ? null : 'Mark an area or add a word to redact.'; },
     payload() {
       return {

@@ -29,6 +29,41 @@ export function defaultsFor(schema = []) {
   return out;
 }
 
+/**
+ * First problem with the values, or null: ``{ key, message }``.
+ * Schema entries may say ``required: 'message'`` and ``match: 'otherKey'``.
+ */
+export function validateOptions(schema = [], values = {}) {
+  for (const o of schema) {
+    if (o.when && !o.when(values)) continue;
+    if (o.items) {
+      const bad = validateOptions(o.items, values);
+      if (bad) return bad;
+    }
+    if (!o.key) continue;
+    const v = values[o.key];
+    if (o.required && !String(v ?? '').trim()) return { key: o.key, message: o.required === true ? `${o.label} is required.` : o.required };
+    if (o.match && v !== values[o.match]) return { key: o.key, message: o.matchMessage || 'These don’t match.' };
+  }
+  return null;
+}
+
+/** Point at the option that needs attention: message under it, focus inside it. */
+export function showOptionError(root, key, message) {
+  const wrap = root.querySelector(`[data-opt="${key}"]`);
+  if (!wrap) { toast(message, 'error'); return; }
+  const details = wrap.closest('details');
+  if (details) details.open = true;
+  wrap.querySelector('.opt-error')?.remove();
+  wrap.classList.add('invalid');
+  wrap.append(h('div', { class: 'opt-error', role: 'alert' }, message));
+  const clear = () => { wrap.classList.remove('invalid'); wrap.querySelector('.opt-error')?.remove(); };
+  wrap.addEventListener('input', clear, { once: true });
+  wrap.addEventListener('click', clear, { once: true });
+  wrap.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  wrap.querySelector('input, textarea, select, button')?.focus({ preventScroll: true });
+}
+
 function missing(need, caps) {
   if (!need) return null;
   if (need === 'tesseract' && !caps.tesseract) return 'Requires Tesseract OCR (not installed)';
@@ -47,7 +82,7 @@ export function renderOptions(root, schema, values, caps, onChange, hooks = {}) 
 
   const build = (o) => {
     if (o.when && !o.when(values)) return null;
-    const wrap = h('div', { class: 'opt' });
+    const wrap = h('div', { class: 'opt', 'data-opt': o.key || null });
     const label = o.label ? h('label', { class: 'lbl' }, o.label) : null;
     switch (o.type) {
       case 'note':

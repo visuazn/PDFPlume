@@ -1,6 +1,7 @@
 // Edit PDF: add text, images, shapes, freehand drawings, highlights, whiteout.
 import { ICONS } from '../icons.js';
 import { h, loadImage, toast } from '../ui.js';
+import { viewerControls } from './common.js';
 import { EditorCore } from './editor-core.js';
 
 const TOOLBAR = [
@@ -108,6 +109,8 @@ export function create(ctx) {
     afterCreate: (el) => { if (el && el.type !== 'path' && !el.replace) setTool('select', { keepEditing: true }); },
   });
 
+  const view = viewerControls({ scroll: () => core.scroll, zoom: () => core.zoom, setZoom: (z) => core.setZoom(z) });
+
   function setTool(name, opts) {
     if (name === 'image') { imageInput.click(); return; }
     core.setTool(name, opts);
@@ -207,18 +210,18 @@ export function create(ctx) {
         toolbar.append(h('button', { type: 'button', class: `tool-btn${core.tool === name ? ' active' : ''}`, 'data-tool': name, title: label, onclick: () => setTool(name), html: `${icon}<span>${label}</span>` }));
       }
       toolbar.append(h('span', { class: 'sep' }),
-        h('button', { type: 'button', class: 'tool-btn', title: 'Undo (Ctrl+Z)', onclick: () => core.undo(), html: `${ICONS.undo}<span>Undo</span>` }),
-        h('button', { type: 'button', class: 'tool-btn', title: 'Zoom out', onclick: () => core.setZoom(core.zoom / 1.2), html: `${ICONS.zoomOut}<span>Zoom</span>` }),
-        h('button', { type: 'button', class: 'tool-btn', title: 'Zoom in', onclick: () => core.setZoom(core.zoom * 1.2), html: `${ICONS.zoomIn}<span>Zoom</span>` }));
+        h('button', { type: 'button', class: 'tool-btn', title: 'Undo (Ctrl+Z)', onclick: () => core.undo(), html: `${ICONS.undo}<span>Undo</span>` }));
       const scroll = h('div', { class: 'editor-scroll' });
       let timer = null;
       scroll.addEventListener('scroll', () => { clearTimeout(timer); timer = setTimeout(() => { if (core.tool === 'edittext') nearbyLines(); }, 150); });
       area.append(h('div', { class: 'editor-shell' }, toolbar, scroll));
       core.mount(scroll);
+      view.attach();
       showLines();
     },
     sidebar(body) { sideBody = body; renderProps(); },
     onFiles() { core.file = null; for (const k of Object.keys(lines)) delete lines[k]; },
+    dirty: () => core.elements.length > 0,
     validate() { return core.elements.length ? null : 'Add some text, an image or a shape first.'; },
     payload() {
       core.stopEditing();

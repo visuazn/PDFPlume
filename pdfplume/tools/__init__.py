@@ -152,6 +152,16 @@ class ToolContext:
         return [i for i in self.inputs if i.kind in kinds]
 
 
+def _page_count(path):
+    if path.suffix.lower() != ".pdf":
+        return None
+    try:
+        with fitz.open(path) as doc:
+            return None if doc.needs_pass else doc.page_count
+    except Exception:
+        return None
+
+
 def _finalize(ctx):
     if not ctx.outputs:
         raise ToolError("Nothing was produced. Check the options and try again.")
@@ -165,7 +175,7 @@ def _finalize(ctx):
         "file": main.name,
         "size": main.stat().st_size,
         "count": len(outputs),
-        "outputs": [{"name": p.name, "size": p.stat().st_size} for p in outputs],
+        "outputs": [{"name": p.name, "size": p.stat().st_size, "pages": _page_count(p)} for p in outputs],
         "original_size": sum(i.path.stat().st_size for i in ctx.inputs if i.path.exists()),
         "extra": ctx.extra,
     }

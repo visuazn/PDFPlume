@@ -154,14 +154,15 @@ export function create(ctx) {
       for (const [key, name, help] of FIELDS) {
         const input = h(key === 'subject' ? 'textarea' : 'input', { type: 'text', id: `meta-${key}`, rows: key === 'subject' ? 2 : null });
         input.value = st.meta[key] || '';
-        input.addEventListener('input', () => { st.meta[key] = input.value; });
+        input.addEventListener('input', () => { st.meta[key] = input.value; st.metaDirty = true; });
         body.append(h('div', { class: 'opt' }, h('label', { class: 'lbl', for: `meta-${key}` }, name), input, help ? h('div', { class: 'help' }, help) : null));
       }
       body.append(h('div', { class: 'opt' }, h('label', { class: 'check-row' },
         h('input', { type: 'checkbox', checked: st.openOutline, onchange: (e) => { st.openOutline = e.target.checked; } }),
         'Show the bookmarks panel when the PDF opens')));
     },
-    onFiles() { st.fileId = null; },
+    onFiles() { st.fileId = null; st.metaDirty = false; },
+    dirty: () => st.dirty || !!st.metaDirty,
     validate() {
       if (st.toc.some((t) => !t.title.trim())) return 'Give every bookmark a title (or delete the empty ones).';
       return null;

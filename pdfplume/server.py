@@ -527,7 +527,7 @@ def create_app(storage=None, jobs=None):
 
     @app.get("/api/jobs/<job_id>/thumb")
     def job_thumb(job_id):
-        """Preview image of one output file (first page for PDFs)."""
+        """Preview image of one output file (``page`` picks the page of a PDF)."""
         job_dir, result = job_result(job_id)
         name = request.args.get("file") or result["file"]
         if "/" in name or "\\" in name or name.startswith("."):
@@ -536,9 +536,10 @@ def create_app(storage=None, jobs=None):
         if not src.is_file():
             abort(404)
         width = max(60, min(int(request.args.get("w", 440)), 1600))
+        pno = max(0, request.args.get("page", 0, type=int) or 0)
         cache_dir = job_dir / "thumbs"
         cache_dir.mkdir(exist_ok=True)
-        cache = cache_dir / f"{src.stem}_{src.suffix[1:]}_{width}.png"
+        cache = cache_dir / f"{src.stem}_{src.suffix[1:]}_{width}_p{pno}.png"
         if not cache.exists():
             ext = src.suffix.lower()
             try:
@@ -546,9 +547,9 @@ def create_app(storage=None, jobs=None):
                     with MUPDF_LOCK:
                         doc = fitz.open(src)
                         try:
-                            if doc.needs_pass or not doc.page_count:
+                            if doc.needs_pass or pno >= doc.page_count:
                                 abort(404)
-                            page = doc[0]
+                            page = doc[pno]
                             zoom = width / max(page.rect.width, 1)
                             page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False).save(str(cache))
                         finally:

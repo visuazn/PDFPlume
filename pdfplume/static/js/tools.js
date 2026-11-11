@@ -392,11 +392,11 @@ export const TOOLS = [
     options: [
       { type: 'tabs', key: 'type', default: 'text', choices: [
         { value: 'text', label: 'Place text', icon: 'text' }, { value: 'image', label: 'Place image', icon: 'image' }] },
-      { type: 'textarea', key: 'text', label: 'Text', default: 'CONFIDENTIAL', when: (o) => o.type === 'text' },
+      { type: 'textarea', key: 'text', label: 'Text', default: 'CONFIDENTIAL', when: (o) => o.type === 'text', required: 'Type the watermark text.' },
       { type: 'textstyle', when: (o) => o.type === 'text', underline: true,
         keys: { font: 'font', size: 'font_size', bold: 'bold', italic: 'italic', underline: 'underline', color: 'color' },
         defaults: { font: 'helvetica', font_size: 48, bold: true, italic: false, underline: false, color: '#5b5bd6' }, label: 'Text format' },
-      { type: 'image', key: 'image_id', label: 'Image', when: (o) => o.type === 'image' },
+      { type: 'image', key: 'image_id', label: 'Image', when: (o) => o.type === 'image', required: 'Choose an image for the watermark.' },
       { type: 'range', key: 'image_size', label: 'Image size (% of page width)', default: 40, min: 5, max: 100, when: (o) => o.type === 'image' },
       { type: 'position', key: 'position', label: 'Position', default: 'middle-center', mosaicKey: 'mosaic' },
       { type: 'row', items: [
@@ -456,8 +456,8 @@ export const TOOLS = [
     desc: 'Encrypt a PDF with a password and set permissions.',
     action: 'Protect', done: 'PDF protected',
     options: [
-      { type: 'password', key: 'password', label: 'Type password', default: '' },
-      { type: 'password', key: 'confirm', label: 'Repeat password', default: '' },
+      { type: 'password', key: 'password', label: 'Password', default: '', required: 'Enter a password to protect the file.' },
+      { type: 'password', key: 'confirm', label: 'Repeat password', default: '', match: 'password', matchMessage: 'The two passwords don’t match.' },
       { type: 'note', html: 'Files are encrypted with AES-256. Don’t forget your password - it can’t be recovered.' },
       { type: 'details', label: 'Permissions (optional)', items: [
         { type: 'checkbox', key: 'allow_print', label: 'Allow printing', default: true },

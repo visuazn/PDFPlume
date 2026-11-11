@@ -2,6 +2,7 @@
 // list in the inspector. Values are keyed by the field widget's xref.
 import { ICONS } from '../icons.js';
 import { esc, h } from '../ui.js';
+import { viewerControls } from './common.js';
 
 const humanize = (name) => {
   const s = String(name || '').replace(/[_.-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim();
@@ -15,6 +16,7 @@ export function create(ctx) {
   let sideBody = null;
   const inputs = new Map(); // xref -> element on the page
   const file = () => ctx.ready()[0];
+  const view = viewerControls({ scroll: () => scroll, zoom: () => st.zoom, setZoom: (z) => { st.zoom = z; renderPages(); } });
 
   async function load(f) {
     if (st.fileId === f.id) return;
@@ -238,16 +240,16 @@ export function create(ctx) {
       const bar = h('div', { class: 'editor-bar' },
         h('span', { class: 'muted', style: 'padding:0 8px;font-size:14px' }, 'Click a field to type · Tab moves to the next one'),
         h('span', { style: 'flex:1' }),
-        h('button', { type: 'button', class: 'tool-btn', onclick: nextEmpty, html: `${ICONS.arrowR}<span>Next empty</span>` }),
-        h('button', { type: 'button', class: 'tool-btn', onclick: () => { st.zoom = Math.max(0.5, st.zoom / 1.2); renderPages(); }, html: `${ICONS.zoomOut}<span>Zoom</span>` }),
-        h('button', { type: 'button', class: 'tool-btn', onclick: () => { st.zoom = Math.min(3, st.zoom * 1.2); renderPages(); }, html: `${ICONS.zoomIn}<span>Zoom</span>` }));
+        h('button', { type: 'button', class: 'tool-btn', onclick: nextEmpty, html: `${ICONS.arrowR}<span>Next empty</span>` }));
       scroll = h('div', { class: 'editor-scroll' });
       area.append(h('div', { class: 'editor-shell' }, bar, scroll));
       renderPages();
+      view.attach();
       ctx.refreshSidebar();
     },
     sidebar(body) { sideBody = body; renderSide(); },
     onFiles() { st.fileId = null; st.fields = []; },
+    dirty: () => st.touched.size > 0,
     canRun() { return !!file() && st.fields.length > 0; },
     summary() {
       if (!st.fields.length) return file() ? 'No form fields' : 'No file yet';

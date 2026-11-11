@@ -110,23 +110,24 @@ function sbLink(t) {
 function renderSidebarLists() {
   const box = $('#sb-scroll');
   if (!box) return;
-  const collapsed = new Set(store.get('collapsed', []));
+  // Categories start folded (the home screen lists every tool); the one in use is always open.
+  const expanded = new Set(store.get('expanded', []));
   const pins = getPins();
   let html = `<a class="sb-link home-link${activeSlug ? '' : ' active'}" href="/"><span class="hi">${ICONS.home}</span><span>Home</span></a>`;
   html += `<div class="sb-group" data-group="pinned"><div class="sb-title">Pinned</div><div class="sb-items">${
     pins.length ? pins.map((s) => sbLink(TOOL_MAP[s])).join('') : '<div class="sb-empty">Star a tool to pin it here.</div>'}</div></div>`;
   for (const c of CATEGORIES) {
     const items = TOOLS.filter((t) => t.cat === c.id);
-    const isCollapsed = collapsed.has(c.id) && !items.some((t) => t.slug === activeSlug);
+    const isCollapsed = !expanded.has(c.id) && !items.some((t) => t.slug === activeSlug);
     html += `<div class="sb-group${isCollapsed ? ' collapsed' : ''}" data-group="${c.id}">
-      <button type="button" class="sb-title" aria-expanded="${!isCollapsed}"><i style="background:${c.color}"></i>${esc(c.name)}${ICONS.chev}</button>
+      <button type="button" class="sb-title" aria-expanded="${!isCollapsed}"><i style="background:${c.color}"></i>${esc(c.name)}<span class="n">${items.length}</span>${ICONS.chev}</button>
       <div class="sb-items">${items.map(sbLink).join('')}</div></div>`;
   }
   box.innerHTML = html;
 }
 
 /** Build the app chrome. Returns the element that holds the page content. */
-export function renderShell({ active = null, crumbs = [] } = {}) {
+export function renderShell({ active = null, crumbs = [], tool = null } = {}) {
   activeSlug = active;
   const app = h('div', { class: 'app', id: 'app-shell' });
   const sidebar = h('aside', { class: 'sidebar', 'aria-label': 'Tools', html: `
@@ -141,7 +142,10 @@ export function renderShell({ active = null, crumbs = [] } = {}) {
     : `<span class="crumb${i ? ' hide-sm' : ''}"><a href="${c.href}">${esc(c.label)}</a>${ICONS.chevR}</span>`)).join('');
   const topbar = h('header', { class: 'topbar', html: `
     <button type="button" class="icon-btn menu-toggle" id="menu-btn" aria-label="Open navigation">${ICONS.menu}</button>
-    <div class="crumbs">${trail || '<b>Home</b>'}</div>
+    ${tool
+    ? `<div class="top-tool">${toolIcon(tool)}<h1>${esc(tool.name)}</h1><p>${esc(tool.desc)}</p></div>`
+    : `<div class="crumbs">${trail || '<b>Home</b>'}</div>`}
+    <div class="top-actions" id="top-actions"></div>
     <button type="button" class="btn ghost sm" id="top-search" title="Search tools">${ICONS.search}<span class="kbd">${modKey} K</span></button>` });
   const page = h('div', { class: 'page', id: 'page' });
   const scrim = h('div', { class: 'scrim' });
@@ -164,7 +168,7 @@ export function renderShell({ active = null, crumbs = [] } = {}) {
     const group = title.parentElement;
     group.classList.toggle('collapsed');
     title.setAttribute('aria-expanded', !group.classList.contains('collapsed'));
-    store.set('collapsed', $$('.sb-group.collapsed').map((g) => g.dataset.group));
+    store.set('expanded', $$('.sb-group:not(.collapsed)').map((g) => g.dataset.group).filter((g) => g !== 'pinned'));
   });
   const activeLink = $('.sb-link.active', sidebar);
   if (activeLink) requestAnimationFrame(() => activeLink.scrollIntoView({ block: 'nearest' }));

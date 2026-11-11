@@ -7,7 +7,32 @@ import { esc, h, toast } from './ui.js';
 const EXT_COLOR = { pdf: '#5b5bd6', docx: '#2b579a', pptx: '#c4441c', xlsx: '#1e7145', zip: '#5b6577', jpg: '#c97a00', png: '#c97a00', txt: '#5b6577', md: '#0a8fb3' };
 const extOf = (name) => (name.split('.').pop() || '').toLowerCase();
 const previewable = (name) => ['pdf', 'jpg', 'jpeg', 'png'].includes(extOf(name));
-const thumb = (jobId, name, w = 440) => `/api/jobs/${jobId}/thumb?file=${encodeURIComponent(name)}&w=${w}`;
+const thumb = (jobId, name, w = 440, page = 0) => `/api/jobs/${jobId}/thumb?file=${encodeURIComponent(name)}&w=${w}${page ? `&page=${page}` : ''}`;
+
+/** One document, large, with arrows to look through its pages before downloading. */
+function pagedPreview(result, output) {
+  const pages = output.pages || 1;
+  let page = 0;
+  const img = h('img', { src: thumb(result.jobId, output.name, 900), alt: `Preview of ${output.name}` });
+  img.onerror = () => box.replaceWith(glyph(output.name));
+  const label = h('span', { class: 'pp-label' });
+  const prev = h('button', { type: 'button', class: 'vc-btn', 'aria-label': 'Previous page', title: 'Previous page (←)', html: ICONS.chevL, onclick: () => show(page - 1) });
+  const next = h('button', { type: 'button', class: 'vc-btn', 'aria-label': 'Next page', title: 'Next page (→)', html: ICONS.chevR, onclick: () => show(page + 1) });
+  function show(n) {
+    page = Math.max(0, Math.min(pages - 1, n));
+    img.src = thumb(result.jobId, output.name, 900, page);
+    label.textContent = `Page ${page + 1} of ${pages}`;
+    prev.disabled = page === 0;
+    next.disabled = page === pages - 1;
+  }
+  const box = h('div', { class: 'paged-preview', tabindex: pages > 1 ? '0' : null }, img,
+    pages > 1 ? h('div', { class: 'pp-nav' }, prev, label, next) : h('div', { class: 'pp-nav single' }, h('span', { class: 'pp-label' }, '1 page')));
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') { e.preventDefault(); show(page + 1); } else if (e.key === 'ArrowLeft') { e.preventDefault(); show(page - 1); }
+  });
+  show(0);
+  return box;
+}
 
 function glyph(name) {
   const ext = extOf(name);
@@ -149,7 +174,9 @@ export function renderResultCanvas(root, { tool, result, state }) {
     import('./widgets/compare.js').then((m) => m.renderComparison(slot, result));
   } else {
     const outputs = result.outputs || [];
-    const shown = outputs.slice(0, outputs.length > 4 ? 3 : 4);
+    const single = outputs.length === 1 && extOf(outputs[0].name) === 'pdf' && tool.slug !== 'protect_pdf' ? outputs[0] : null;
+    if (single) wrap.append(pagedPreview(result, single));
+    const shown = single ? [] : outputs.slice(0, outputs.length > 4 ? 3 : 4);
     const previews = h('div', { class: 'result-previews' });
     for (const o of shown) {
       const cell = h('div', { class: `rp${outputs.length > 1 ? ' small' : ''}` });
@@ -164,7 +191,7 @@ export function renderResultCanvas(root, { tool, result, state }) {
       previews.append(cell);
     }
     if (outputs.length > shown.length) previews.append(h('div', { class: 'rp small' }, h('div', { class: 'more' }, `+${outputs.length - shown.length}`), h('span', {}, 'more in the ZIP')));
-    wrap.append(previews);
+    if (!single) wrap.append(previews);
   }
   for (const n of notesFor(tool, result)) {
     wrap.append(h('div', { class: 'callout info', style: 'width:min(560px,100%);margin:0', html: `${ICONS.info}<span>${esc(n)}</span>` }));
@@ -177,16 +204,16 @@ export function renderResultInspector(body, { tool, result, state, onBack, onNew
   const ext = extOf(result.file);
   body.append(h('div', { class: 'res-file' },
     h('span', { class: 'fi-ext', style: { '--c': EXT_COLOR[ext] || 'var(--accent)' } }, ext.toUpperCase()),
-    h('div', { style: 'min-width:0' }, h('b', {}, result.file),
+    h('div', { style: 'min-width:0' }, h('b', { title: result.file }, h('span', { class: 'stem' }, result.file.slice(0, result.file.length - ext.length - 1)), h('span', {}, `.${ext}`)),
       h('small', {}, `${humanSize(result.size)}${result.count > 1 ? ` · ${result.count} files inside` : ''}`))));
   body.append(h('a', { class: 'btn-run', id: 'download-btn', href: url, download: result.file, style: 'margin-bottom:10px',
     html: `${ICONS.download}<span>Download${result.count > 1 ? ' ZIP' : ''}</span>` }));
   const actions = h('div', { class: 'res-actions' });
   if (ext === 'pdf') actions.append(h('a', { class: 'btn', href: `${url}?inline=1`, target: '_blank', rel: 'noopener', html: `${ICONS.eye} Open` }));
   actions.append(
-    h('button', { type: 'button', class: 'btn', onclick: onBack, html: `${ICONS.back} Adjust` }),
-    h('button', { type: 'button', class: 'btn', onclick: onNew, html: `${ICONS.plus} New task` }),
-    h('button', { type: 'button', class: 'btn danger', title: 'Delete the result and your uploads now', html: `${ICONS.trash} Delete`, onclick: async () => {
+    h('button', { type: 'button', class: 'btn', onclick: onBack, title: 'Go back to your files and settings', html: `${ICONS.back} Change settings` }),
+    h('button', { type: 'button', class: 'btn', onclick: onNew, title: 'Clear everything and start again with new files', html: `${ICONS.plus} Start over` }),
+    h('button', { type: 'button', class: 'btn danger', title: 'Delete the result and your uploads now', html: `${ICONS.trash} Delete now`, onclick: async () => {
       await api.del(`/api/jobs/${result.jobId}`).catch(() => {});
       for (const f of state.files) if (f.id) api.del(`/api/files/${f.id}`).catch(() => {});
       toast('Deleted from this computer');

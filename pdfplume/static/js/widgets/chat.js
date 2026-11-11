@@ -2,6 +2,7 @@
 // Answers cite pages as [p. N]; citations and sources jump to the passage.
 import { ICONS } from '../icons.js';
 import { esc, h } from '../ui.js';
+import { viewerControls } from './common.js';
 
 const CITE = /\[(?:p|pp|page)\.?\s*(\d+)(?:\s*[-–,]\s*(\d+))?\]|\((?:p|page)\.\s*(\d+)\)/gi;
 
@@ -13,6 +14,7 @@ export function create(ctx) {
   let sendBtn = null;
   const views = [];
   const file = () => ctx.ready()[0];
+  const view = viewerControls({ scroll: () => scroll, zoom: () => st.zoom, setZoom: (z) => { st.zoom = z; renderPages(); } });
 
   async function load(f) {
     if (st.fileId === f.id) return;
@@ -197,12 +199,11 @@ export function create(ctx) {
       area.innerHTML = '';
       const bar = h('div', { class: 'editor-bar' },
         h('span', { class: 'muted', style: 'padding:0 8px;font-size:14px' }, `${st.pages.length} pages · ${(st.info.words || 0).toLocaleString()} words`),
-        h('span', { style: 'flex:1' }),
-        h('button', { type: 'button', class: 'tool-btn', onclick: () => { st.zoom = Math.max(0.5, st.zoom / 1.2); renderPages(); }, html: `${ICONS.zoomOut}<span>Zoom</span>` }),
-        h('button', { type: 'button', class: 'tool-btn', onclick: () => { st.zoom = Math.min(3, st.zoom * 1.2); renderPages(); }, html: `${ICONS.zoomIn}<span>Zoom</span>` }));
+        h('span', { style: 'flex:1' }));
       scroll = h('div', { class: 'editor-scroll' });
       area.append(h('div', { class: 'editor-shell' }, bar, scroll));
       renderPages();
+      view.attach();
       if (fresh) ctx.refreshSidebar();
     },
     sidebar(body) {

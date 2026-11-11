@@ -1,6 +1,7 @@
 // Sign PDF: create a signature (type, draw or upload) and place it on pages.
 import { ICONS } from '../icons.js';
 import { esc, h, modal, toast } from '../ui.js';
+import { viewerControls } from './common.js';
 import { EditorCore } from './editor-core.js';
 import { imageToDataUrl } from './editor.js';
 
@@ -189,6 +190,7 @@ export function create(ctx) {
     onDropField: (type, p, page) => place(type, page, p),
   });
 
+  const view = viewerControls({ scroll: () => core.scroll, zoom: () => core.zoom, setZoom: (z) => core.setZoom(z) });
   const today = () => new Date().toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
 
   async function ensure(type) {
@@ -349,17 +351,17 @@ export function create(ctx) {
       area.innerHTML = '';
       const bar = h('div', { class: 'editor-bar' },
         h('span', { style: 'font-weight:700;padding:0 8px' }, esc(f.name)), h('span', { style: 'flex:1' }),
-        h('button', { type: 'button', class: 'tool-btn', onclick: () => core.undo(), html: `${ICONS.undo}<span>Undo</span>` }),
-        h('button', { type: 'button', class: 'tool-btn', onclick: () => core.setZoom(core.zoom / 1.2), html: `${ICONS.zoomOut}<span>Zoom</span>` }),
-        h('button', { type: 'button', class: 'tool-btn', onclick: () => core.setZoom(core.zoom * 1.2), html: `${ICONS.zoomIn}<span>Zoom</span>` }));
+        h('button', { type: 'button', class: 'tool-btn', onclick: () => core.undo(), html: `${ICONS.undo}<span>Undo</span>` }));
       const scroll = h('div', { class: 'editor-scroll' });
       area.append(h('div', { class: 'editor-shell' }, bar, scroll));
       core.mount(scroll);
+      view.attach();
       loadExisting();
       if (!asked && !st.signature) { asked = true; setTimeout(() => ensure('signature'), 300); }
     },
     sidebar(body) { sideBody = body; renderSide(); },
     onFiles() { core.file = null; st.existing = null; },
+    dirty: () => core.elements.length > 0,
     validate() {
       if (st.digital) {
         if (!st.certId) return 'Create or import a certificate first.';
