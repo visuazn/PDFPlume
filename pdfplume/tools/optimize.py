@@ -114,7 +114,7 @@ def compress_pdf(ctx):
         before = inp.path.stat().st_size
         if mode == "target":
             if before <= limit:
-                best, fits = ctx.decrypted_path(inp), True
+                best, fits = inp.path, True
             else:
                 best, fits = _by_target(ctx, inp, limit, step)
             if not fits:
@@ -123,8 +123,8 @@ def compress_pdf(ctx):
             best = _by_level(ctx, inp, level, step)
         out = ctx.output_path(f"{inp.stem}_compressed.pdf")
         if best.stat().st_size >= before:
-            # Never hand back a bigger file than the user gave us.
-            shutil.copyfile(ctx.decrypted_path(inp), out)
+            # Never hand back a bigger file than the user gave us (the original, untouched).
+            shutil.copyfile(inp.path, out)
         else:
             shutil.copyfile(best, out)
         ctx.add_output(out)
@@ -159,9 +159,8 @@ def repair_pdf(ctx):
                               attempt_recovery=True) as pdf:
                 pdf.remove_unreferenced_resources()
                 pdf.save(out, fix_metadata_version=True)
-            check = fitz.open(out)
-            done = check.page_count > 0
-            check.close()
+            with fitz.open(out) as check:
+                done = check.page_count > 0
         except pikepdf.PasswordError:
             raise ToolError(f"'{inp.name}' is password protected. Enter the password first.")
         except Exception:
@@ -174,7 +173,7 @@ def repair_pdf(ctx):
                     doc.authenticate(inp.password or "")
                 if doc.page_count == 0:
                     raise ValueError("no pages")
-                doc.save(out, garbage=4, deflate=True, clean=True)
+                doc.save(out, garbage=4, deflate=True, clean=True, encryption=fitz.PDF_ENCRYPT_NONE)
                 doc.close()
                 done = True
             except Exception:
@@ -183,13 +182,15 @@ def repair_pdf(ctx):
         if not done and engines.ghostscript_path():
             try:
                 engines.ghostscript(["-sDEVICE=pdfwrite", f"-sOutputFile={out}", str(inp.path)])
-                done = fitz.open(out).page_count > 0
+                with fitz.open(out) as check:
+                    done = check.page_count > 0
             except Exception:
                 done = False
         if not done:
             raise ToolError(f"'{inp.name}' is too badly damaged to be recovered.")
         try:
-            was_broken = fitz.open(inp.path).is_repaired
+            with fitz.open(inp.path) as original:
+                was_broken = original.is_repaired
         except Exception:
             was_broken = True
         notes.append({"file": inp.name, "had_errors": bool(was_broken)})

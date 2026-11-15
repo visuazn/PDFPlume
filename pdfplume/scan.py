@@ -63,7 +63,8 @@ def detect_document(image, max_side=900):
         return {"corners": FULL, "found": False}
     pts = _order(best[1]).astype(np.float64)
     pts += (pts.mean(axis=0) - pts) * 0.006  # step just inside the paper's edge
-    return {"corners": [[round(float(x) / (w - 1), 4), round(float(y) / (h - 1), 4)] for x, y in pts], "found": True}
+    return {"corners": [[round(float(x) / max(w - 1, 1), 4), round(float(y) / max(h - 1, 1), 4)] for x, y in pts],
+            "found": True}
 
 
 def _valid(corners):

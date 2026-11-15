@@ -7,7 +7,7 @@ import io
 import math
 
 import pymupdf as fitz
-from PIL import Image
+from PIL import Image, ImageOps
 
 from ..utils import clamp, parse_color, parse_page_ranges, to_bool, to_float, to_int
 from . import ToolError, tool
@@ -114,7 +114,7 @@ def _image_stamp(ctx):
         raise ToolError("Choose an image for the watermark.")
     opacity = clamp(to_float(ctx.opt("opacity"), 50) / 100, 0.02, 1)
     with Image.open(path) as im:
-        im = im.convert("RGBA")
+        im = ImageOps.exif_transpose(im).convert("RGBA")  # phone photos carry their rotation in EXIF
         if opacity < 1:
             alpha = im.getchannel("A").point(lambda a: int(a * opacity))
             im.putalpha(alpha)
@@ -152,7 +152,8 @@ def add_watermark(ctx):
             else:
                 scale = 1.0
             # Never let the watermark spill outside the page.
-            scale = min(scale, (W - 2 * margin) / bw, (H - 2 * margin) / bh) if not mosaic else \
+            mx, my = min(margin, W * 0.1), min(margin, H * 0.1)  # tiny pages get a smaller margin
+            scale = min(scale, (W - 2 * mx) / bw, (H - 2 * my) / bh) if not mosaic else \
                 min(scale, W / bw, H / bh)
             w, h = bw * scale, bh * scale
             rects = []

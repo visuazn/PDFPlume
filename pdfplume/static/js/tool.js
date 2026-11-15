@@ -82,6 +82,7 @@ async function uploadEntry(entry, file) {
   const p = (async () => {
     try {
       const meta = await api.upload(file, (x) => { entry.progress = x; updateCard(entry); });
+      if (!state.files.includes(entry)) { api.del(`/api/files/${meta.id}`).catch(() => {}); return; }
       Object.assign(entry, meta, { uploading: false });
       if (entry.needs_password) await unlockEntry(entry);
       if (entry.damaged) entry.error = 'This PDF looks damaged – try Repair PDF';
@@ -262,11 +263,15 @@ function addFromUrl() {
     if (!url) return;
     m.close();
     const entry = { key: ++uid, name: url.split('/').pop() || 'download', size: 0, uploading: true, progress: 0.5, rotation: 0, options: {} };
-    if (!tool.multiple) state.files = [];
+    if (!tool.multiple) {
+      state.files.forEach((f) => f.id && api.del(`/api/files/${f.id}`).catch(() => {}));
+      state.files = [];
+    }
     state.files.push(entry);
     setView('work');
     try {
       const meta = await api.post('/api/upload-url', { url });
+      if (!state.files.includes(entry)) { api.del(`/api/files/${meta.id}`).catch(() => {}); return; }
       Object.assign(entry, meta, { uploading: false });
       if (!tool.acceptInfo.kinds.includes(meta.kind)) { removeFile(entry); toast('That file type doesn’t work with this tool.', 'error'); return; }
       if (entry.needs_password) await unlockEntry(entry);
@@ -500,8 +505,9 @@ async function run() {
     toast(min > 1 ? `Add at least ${min} files first.` : 'Add a file first.', 'error');
     return;
   }
-  const locked = ready.find((f) => f.needs_password && !f.password);
-  if (locked && !(await unlockEntry(locked))) return;
+  for (const locked of ready.filter((f) => f.needs_password && !f.password)) {
+    if (!(await unlockEntry(locked))) return;
+  }
   if (widget.validate) {
     const err = widget.validate();
     if (err) { toast(err, 'error'); return; }

@@ -1,6 +1,6 @@
 // Redact PDF: mark areas by hand and/or search words and patterns.
 import { ICONS } from '../icons.js';
-import { debounce, esc, h, toast } from '../ui.js';
+import { debounce, h, toast } from '../ui.js';
 import { viewerControls } from './common.js';
 import { EditorCore } from './editor-core.js';
 
@@ -71,7 +71,7 @@ export function create(ctx) {
       renderSide();
     };
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
-    const chips = h('div', { class: 'chip-list' }, ...st.terms.map((t) => h('span', { class: 'chip' }, esc(t),
+    const chips = h('div', { class: 'chip-list' }, ...st.terms.map((t) => h('span', { class: 'chip' }, t,
       h('span', { class: 'cnt' }, st.counts[t.toLowerCase()] || 0),
       h('button', { type: 'button', onclick: () => { st.terms = st.terms.filter((x) => x !== t); refreshMatches(); renderSide(); } }, '×'))));
     sideBody.append(h('div', { class: 'opt' }, h('label', { class: 'lbl' }, 'Search text to redact'),
@@ -112,6 +112,7 @@ export function create(ctx) {
       view.attach();
       core.setTool(core.tool);
       applyOverlays();
+      if (st.terms.length || st.patterns.size) refreshMatches();
     },
     sidebar(body) { sideBody = body; renderSide(); },
     onFiles() { core.file = null; st.matches = []; },

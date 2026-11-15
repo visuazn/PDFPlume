@@ -44,6 +44,16 @@ def safe_stem(name, default="document"):
     return stem[:120] or default
 
 
+def safe_filename(name, default="document"):
+    """``name`` reduced to a plain file name: no folders, no characters a file system rejects."""
+    name = unicodedata.normalize("NFC", str(name or "")).replace("\\", "/").rsplit("/", 1)[-1]
+    name = re.sub(r'[:*?"<>|\x00-\x1f]+', "_", name).strip(" .")
+    m = re.search(r"\.[A-Za-z0-9]{1,8}$", name)
+    suffix = m.group(0).lower() if m else ""
+    stem = name[: len(name) - len(suffix)].strip(" ._")[:150] or default
+    return stem + suffix
+
+
 def unique_path(directory, filename):
     directory = Path(directory)
     path = directory / filename
@@ -82,7 +92,7 @@ def parse_page_ranges(spec, page_count, allow_empty=False):
     Supports open ranges (``"5-"``, ``"-3"``), ``"all"``, ``"last"`` /
     ``"end"`` and reversed ranges (``"5-3"``).
     """
-    spec = (spec or "").strip().lower()
+    spec = str(spec or "").strip().lower()
     if not spec:
         if allow_empty:
             return []
@@ -96,7 +106,7 @@ def parse_page_ranges(spec, page_count, allow_empty=False):
             return default
         if tok in ("last", "end", "n"):
             return page_count
-        if not tok.isdigit():
+        if not re.fullmatch(r"[0-9]{1,9}", tok):  # str.isdigit() also accepts "²" and friends
             raise PageRangeError(f"'{tok}' is not a valid page number.")
         return int(tok)
 

@@ -47,6 +47,7 @@ export function create(ctx) {
     flash.style.opacity = '0.8';
     setTimeout(() => { flash.style.opacity = '0'; }, 120);
     c.toBlob((blob) => {
+      if (!blob) { toast('The camera picture could not be saved.', 'error'); return; }
       shots += 1;
       ctx.addFiles([new File([blob], `scan_${String(shots).padStart(2, '0')}.jpg`, { type: 'image/jpeg' })]);
     }, 'image/jpeg', 0.92);

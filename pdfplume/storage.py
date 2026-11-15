@@ -89,7 +89,9 @@ class Storage:
 
     def update_meta(self, file_id, **fields):
         d = self.upload_dir(file_id)
-        meta = read_json(d / "meta.json") or {}
+        meta = read_json(d / "meta.json")
+        if not meta:  # deleted (or expired) in the meantime: don't bring half of it back
+            raise KeyError(file_id)
         meta.update(fields)
         write_json(d / "meta.json", meta)
         return meta

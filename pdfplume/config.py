@@ -16,6 +16,9 @@ def _int(name, default):
 
 HOST = os.environ.get("PDFPLUME_HOST", "127.0.0.1")
 PORT = _int("PDFPLUME_PORT", 8765)
+# Extra host names PDFPlume may be reached under while it only listens on this computer
+# (e.g. behind a reverse proxy): comma separated.
+ALLOWED_HOSTS = {h.strip().lower() for h in os.environ.get("PDFPLUME_ALLOWED_HOSTS", "").split(",") if h.strip()}
 DATA_DIR = Path(os.environ.get("PDFPLUME_DATA_DIR", PROJECT_DIR / "data")).resolve()
 
 # Uploaded and processed files are deleted after this many minutes.

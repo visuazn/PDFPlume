@@ -94,6 +94,7 @@ def main():
     from pdfplume import engines
     from pdfplume.server import create_app
 
+    config.HOST = args.host  # the server checks the Host header when it only listens locally
     port, addresses = choose_port(args.host, args.port)
     app = create_app()
     storage = app.extensions["pdfplume_storage"]

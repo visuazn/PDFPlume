@@ -2,7 +2,7 @@
 
 import pymupdf as fitz
 
-from ..utils import parse_page_ranges, to_bool, to_int
+from ..utils import parse_page_ranges, to_bool, to_float, to_int
 from . import ToolError, tool
 
 
@@ -35,7 +35,7 @@ def merge_pdf(ctx):
             out.set_toc(toc)
         except Exception:
             pass
-    name = ctx.opt("filename") or "merged.pdf"
+    name = str(ctx.opt("filename") or "merged.pdf").strip() or "merged.pdf"
     ctx.save_pdf(out, name if name.lower().endswith(".pdf") else name + ".pdf")
 
 
@@ -90,7 +90,7 @@ def split_pdf(ctx):
             else:
                 groups = [[p] for p in pages]
         elif mode == "size":
-            limit = max(0.05, float(ctx.opt("max_mb", 1))) * 1024 * 1024
+            limit = max(0.05, to_float(ctx.opt("max_mb"), 1)) * 1024 * 1024
             sizes = []
             for p in range(count):
                 one = fitz.open()

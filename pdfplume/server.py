@@ -9,17 +9,19 @@ from pathlib import Path
 
 import pymupdf as fitz
 from flask import Flask, abort, jsonify, request, send_file, send_from_directory
+from werkzeug.exceptions import HTTPException
 from PIL import Image, ImageOps
 
 from . import __version__, chat, config, engines, llm
 from .certs import CertError, CertStore, verify_pdf
 from .jobs import JobManager
 from .storage import Storage, read_json, valid_id, write_json
-from .tools import registry
-from .utils import file_kind, parse_page_ranges
+from .tools import ToolError, registry
+from .utils import PageRangeError, file_kind, parse_page_ranges
 
 # MuPDF must not be used from several threads at once.
 MUPDF_LOCK = threading.RLock()
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 INTERACTIVE_TOOLS = {"chat_pdf"}  # tool pages that work without a processing job
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -38,6 +40,39 @@ def create_app(storage=None, jobs=None):
 
     def err(message, code=400):
         return jsonify({"error": message}), code
+
+    @app.before_request
+    def check_host():
+        """While PDFPlume only listens on this computer, refuse requests addressed to another
+        name: a web page that points its own domain at 127.0.0.1 (DNS rebinding) could
+        otherwise read the files kept here."""
+        if config.HOST.lower() not in LOCAL_HOSTS:
+            return None
+        host = (request.host or "").lower()
+        name = host[1:].split("]")[0] if host.startswith("[") else host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+        if name in LOCAL_HOSTS or name in config.ALLOWED_HOSTS:
+            return None
+        return err("PDFPlume only answers on localhost. To reach it under another name, start it with "
+                   "--host 0.0.0.0 or set PDFPLUME_ALLOWED_HOSTS.", 403)
+
+    def finish_upload(meta, label):
+        """Read what the page needs to know about a new file. Returns (meta, error)."""
+        try:
+            if meta["kind"] == "pdf":
+                meta = storage.update_meta(meta["id"], **inspect_pdf(storage.get_meta(meta["id"])))
+            elif meta["kind"] == "image":
+                try:
+                    with Image.open(storage.get_meta(meta["id"])["path"]) as im:
+                        meta = storage.update_meta(meta["id"], width=im.width, height=im.height,
+                                                   pages=getattr(im, "n_frames", 1))
+                except KeyError:
+                    raise
+                except Exception:
+                    storage.delete_file(meta["id"])
+                    return None, f"'{label}' is not a valid image."
+        except KeyError:
+            return None, "The file was removed while it was being read. Please add it again."
+        return meta, None
 
     def get_meta_or_404(file_id):
         try:
@@ -124,38 +159,33 @@ def create_app(storage=None, jobs=None):
         f = request.files.get("file")
         if f is None or not f.filename:
             return err("No file received.")
-        meta = storage.add_file(f.filename, lambda p: f.save(p))
-        if meta["kind"] == "pdf":
-            meta = storage.update_meta(meta["id"], **inspect_pdf(storage.get_meta(meta["id"])))
-        elif meta["kind"] == "image":
-            try:
-                with Image.open(storage.get_meta(meta["id"])["path"]) as im:
-                    meta = storage.update_meta(meta["id"], width=im.width, height=im.height,
-                                               pages=getattr(im, "n_frames", 1))
-            except Exception:
-                storage.delete_file(meta["id"])
-                return err(f"'{f.filename}' is not a valid image.")
+        meta, problem = finish_upload(storage.add_file(f.filename, lambda p: f.save(p)), f.filename)
+        if problem:
+            return err(problem)
         return jsonify(public_meta(meta))
 
     @app.post("/api/upload-url")
     def upload_url():
         """Download a remote file (e.g. from a URL the user pasted)."""
         import urllib.request
-        url = (request.get_json(silent=True) or {}).get("url", "").strip()
+        url = str((request.get_json(silent=True) or {}).get("url") or "").strip()
         if not re.match(r"^https?://", url):
             return err("Please enter a valid http(s) URL.")
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 PDFPlume"})
             with urllib.request.urlopen(req, timeout=30) as resp:
-                data = resp.read(config.MAX_UPLOAD_MB * 1024 * 1024)
+                limit = config.MAX_UPLOAD_MB * 1024 * 1024
+                data = resp.read(limit + 1)
+                if len(data) > limit:
+                    return err(f"File too large. The limit is {config.MAX_UPLOAD_MB} MB.", 413)
                 name = Path(resp.url.split("?")[0]).name or "download.pdf"
                 if "." not in name and "pdf" in resp.headers.get("Content-Type", ""):
                     name += ".pdf"
         except Exception as exc:
             return err(f"Could not download the file: {exc}")
-        meta = storage.add_file(name, lambda p: p.write_bytes(data))
-        if meta["kind"] == "pdf":
-            meta = storage.update_meta(meta["id"], **inspect_pdf(storage.get_meta(meta["id"])))
+        meta, problem = finish_upload(storage.add_file(name, lambda p: p.write_bytes(data)), name)
+        if problem:
+            return err(problem)
         return jsonify(public_meta(meta))
 
     @app.get("/api/files/<file_id>")
@@ -171,9 +201,12 @@ def create_app(storage=None, jobs=None):
     @app.post("/api/files/<file_id>/password")
     def set_password(file_id):
         meta = get_meta_or_404(file_id)
-        password = (request.get_json(silent=True) or {}).get("password", "")
+        password = str((request.get_json(silent=True) or {}).get("password") or "")
         with MUPDF_LOCK:
-            doc = fitz.open(meta["path"])
+            try:
+                doc = fitz.open(meta["path"])
+            except Exception:
+                return err("This file is damaged or is not a valid PDF. Try Repair PDF first.")
             ok = (not doc.needs_pass) or bool(doc.authenticate(password))
             doc.close()
         if not ok:
@@ -205,7 +238,7 @@ def create_app(storage=None, jobs=None):
     @app.get("/api/files/<file_id>/thumb/<int:page>")
     def thumbnail(file_id, page):
         meta = get_meta_or_404(file_id)
-        width = max(40, min(int(request.args.get("w", 240)), 2400))
+        width = max(40, min(request.args.get("w", 240, type=int) or 240, 2400))
         annots = request.args.get("annots") != "0"  # the form filler draws its own fields
         cache = storage.cache_dir(file_id) / f"p{page}_w{width}{'' if annots else '_bare'}.png"
         if not cache.exists():
@@ -449,8 +482,12 @@ def create_app(storage=None, jobs=None):
         spec = tools.get(slug)
         if spec is None:
             return err("Unknown tool.", 404)
-        body = request.get_json(silent=True) or {}
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            body = {}
         files = body.get("files") or []
+        if not isinstance(files, list):
+            return err("Invalid request.")
         inputs = []
         for item in files:
             fid = item.get("id") if isinstance(item, dict) else item
@@ -464,14 +501,16 @@ def create_app(storage=None, jobs=None):
             if isinstance(item, dict):
                 if item.get("password"):
                     entry["password"] = item["password"]
-                entry["options"] = item.get("options") or {}
+                entry["options"] = item["options"] if isinstance(item.get("options"), dict) else {}
             inputs.append(entry)
         if len(inputs) < spec["min_files"]:
             need = spec["min_files"]
             return err(f"Please select at least {need} file{'s' if need > 1 else ''}.")
         if spec["max_files"] and len(inputs) > spec["max_files"]:
             return err(f"This tool accepts at most {spec['max_files']} file(s).")
-        options = body.get("options") or {}
+        options = body.get("options")
+        if not isinstance(options, dict):
+            options = {}
         digital = options.get("digital")
         if isinstance(digital, dict) and digital.get("cert_id"):
             try:
@@ -506,15 +545,21 @@ def create_app(storage=None, jobs=None):
             abort(404)
         return job_dir, result
 
-    @app.get("/api/jobs/<job_id>/download")
-    def job_download(job_id):
-        job_dir, result = job_result(job_id)
+    def job_file(job_dir, result):
+        """The output file a request asks for - only ever one the job itself produced."""
         name = request.args.get("file") or result["file"]
-        if "/" in name or "\\" in name or name.startswith("."):
-            abort(400)
+        known = {result.get("file")} | {o.get("name") for o in result.get("outputs", [])}
+        if name not in known or Path(name).name != name:
+            abort(404)
         path = job_dir / "out" / name
         if not path.is_file():
             abort(404)
+        return name, path
+
+    @app.get("/api/jobs/<job_id>/download")
+    def job_download(job_id):
+        job_dir, result = job_result(job_id)
+        name, path = job_file(job_dir, result)
         inline = bool(request.args.get("inline"))
         return send_file(path, download_name=name, as_attachment=not inline)
 
@@ -529,13 +574,8 @@ def create_app(storage=None, jobs=None):
     def job_thumb(job_id):
         """Preview image of one output file (``page`` picks the page of a PDF)."""
         job_dir, result = job_result(job_id)
-        name = request.args.get("file") or result["file"]
-        if "/" in name or "\\" in name or name.startswith("."):
-            abort(400)
-        src = job_dir / "out" / name
-        if not src.is_file():
-            abort(404)
-        width = max(60, min(int(request.args.get("w", 440)), 1600))
+        _name, src = job_file(job_dir, result)
+        width = max(60, min(request.args.get("w", 440, type=int) or 440, 1600))
         pno = max(0, request.args.get("page", 0, type=int) or 0)
         cache_dir = job_dir / "thumbs"
         cache_dir.mkdir(exist_ok=True)
@@ -573,10 +613,9 @@ def create_app(storage=None, jobs=None):
             src = job_dir / "out" / out["name"]
             if not src.is_file() or file_kind(src.suffix) in ("other",):
                 continue
-            meta = storage.add_file(out["name"], lambda p, s=src: shutil.copyfile(s, p))
-            if meta["kind"] == "pdf":
-                meta = storage.update_meta(meta["id"], **inspect_pdf(storage.get_meta(meta["id"])))
-            metas.append(public_meta(meta))
+            meta, problem = finish_upload(storage.add_file(out["name"], lambda p, s=src: shutil.copyfile(s, p)), out["name"])
+            if not problem:
+                metas.append(public_meta(meta))
         return jsonify({"files": metas})
 
     @app.post("/api/jobs/<job_id>/cancel")
@@ -598,6 +637,25 @@ def create_app(storage=None, jobs=None):
     @app.errorhandler(423)
     def locked(_e):
         return err("This file is password protected.", 423)
+
+    @app.errorhandler(ToolError)
+    @app.errorhandler(PageRangeError)
+    def bad_input(exc):
+        return err(str(exc), 400)
+
+    @app.errorhandler(Exception)
+    def unexpected(exc):
+        """API calls always answer in JSON, also when something unforeseen goes wrong."""
+        if isinstance(exc, HTTPException):
+            if request.path.startswith("/api/") and exc.code not in (413, 423):
+                return err(exc.description or exc.name, exc.code or 500)
+            return exc
+        if isinstance(exc, (fitz.FileDataError, fitz.EmptyFileError)):
+            return err("This file is damaged or is not a valid PDF. Try Repair PDF first.", 400)
+        app.logger.exception("Unhandled error on %s", request.path)
+        if request.path.startswith("/api/"):
+            return err(f"Something went wrong: {exc}", 500)
+        return "Something went wrong.", 500
 
     app.extensions["pdfplume_started"] = time.time()
     return app

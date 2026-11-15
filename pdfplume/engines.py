@@ -12,6 +12,7 @@ better results when one of these programs is installed:
 import functools
 import glob
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -220,6 +221,9 @@ def tesseract_pdf(image_path, lang, dpi, timeout=600):
     exe = tesseract_path()
     if not exe:
         raise EngineError("Tesseract OCR is not installed.")
+    lang = str(lang or "eng")
+    if not re.fullmatch(r"[A-Za-z0-9_]+(\+[A-Za-z0-9_]+)*", lang):
+        raise EngineError(f"'{lang}' is not a valid OCR language.")
     cmd = [exe, str(image_path), "stdout", "-l", lang, "--dpi", str(int(dpi)),
            "-c", "textonly_pdf=1", "pdf"]
     # Tesseract's OpenMP threads slow down dramatically when the CPU is busy

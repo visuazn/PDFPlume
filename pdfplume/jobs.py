@@ -55,6 +55,10 @@ class JobManager:
             self._futures.pop(job_id, None)
             return result
         future = self._futures.get(job_id)
+        if future is None:
+            # No result and nobody working on it: the server was restarted while it ran.
+            return {"status": "error", "message": "This task was interrupted because PDFPlume "
+                                                  "was restarted. Please run it again."}
         if future is not None and future.cancelled():
             self._futures.pop(job_id, None)
             return {"status": "cancelled", "message": "Cancelled"}
@@ -67,6 +71,10 @@ class JobManager:
                         self._pool = None
                 return {"status": "error",
                         "message": "The worker process crashed while processing the file."}
+            # Finished: the result was written between our two looks, or could not be written.
+            self._futures.pop(job_id, None)
+            return read_json(job_dir / "result.json") or {
+                "status": "error", "message": "The result could not be saved. Check the free disk space."}
         progress = read_json(job_dir / "progress.json", {}) or {}
         return {"status": "running", "progress": progress.get("progress", 0),
                 "message": progress.get("message", "Processing")}

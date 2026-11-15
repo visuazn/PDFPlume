@@ -64,6 +64,7 @@ export function signatureDialog({ title = 'Create your signature', name = '' } =
       last = p; drawn = true;
     });
     pad.addEventListener('pointerup', () => { drawing = false; });
+    pad.addEventListener('pointercancel', () => { drawing = false; });
 
     const render = () => {
       body.innerHTML = '';
@@ -206,7 +207,7 @@ export function create(ctx) {
     }
     if (type === 'stamp' && !st.stamp) {
       const input = h('input', { type: 'file', accept: 'image/*' });
-      const file = await new Promise((r) => { input.onchange = () => r(input.files[0]); input.click(); });
+      const file = await new Promise((r) => { input.onchange = () => r(input.files[0]); input.oncancel = () => r(null); input.click(); });
       if (!file) return false;
       st.stamp = await imageToDataUrl(file, 1200);
       renderSide();
@@ -350,7 +351,7 @@ export function create(ctx) {
       await core.load(f);
       area.innerHTML = '';
       const bar = h('div', { class: 'editor-bar' },
-        h('span', { style: 'font-weight:700;padding:0 8px' }, esc(f.name)), h('span', { style: 'flex:1' }),
+        h('span', { style: 'font-weight:700;padding:0 8px' }, f.name), h('span', { style: 'flex:1' }),
         h('button', { type: 'button', class: 'tool-btn', onclick: () => core.undo(), html: `${ICONS.undo}<span>Undo</span>` }));
       const scroll = h('div', { class: 'editor-scroll' });
       area.append(h('div', { class: 'editor-shell' }, bar, scroll));

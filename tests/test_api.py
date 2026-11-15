@@ -154,7 +154,7 @@ def test_result_thumbnails(client, samples):
     thumb = client.get(f"/api/jobs/{job}/thumb?file={first}&w=200")
     assert thumb.status_code == 200 and thumb.mimetype == "image/png"
     assert client.get(f"/api/jobs/{job}/thumb?file={st['file']}").status_code == 404  # the zip
-    assert client.get(f"/api/jobs/{job}/thumb?file=../result.json").status_code == 400
+    assert client.get(f"/api/jobs/{job}/thumb?file=../result.json").status_code == 404
 
 
 def test_app_manifest_and_service_worker(client):

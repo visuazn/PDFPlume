@@ -63,7 +63,11 @@ def nup_pdf(ctx):
                 ch = (sh - 2 * margin - (rows - 1) * gap) / rows
                 scale = min(cw / first.width, ch / first.height)
                 layouts.append((scale, sw, sh, cols, rows, cw, ch))
+        if not layouts:
+            raise ToolError("Choose a page orientation.")
         _, sw, sh, cols, rows, cw, ch = max(layouts)
+        if cw < 8 or ch < 8:
+            raise ToolError("The margins and gaps leave no room for the pages. Make them smaller.")
         out = fitz.open()
         for start in range(0, src.page_count, per):
             ctx.progress(start / src.page_count, "Arranging pages")

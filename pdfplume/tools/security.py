@@ -194,22 +194,69 @@ def find_matches(doc, terms, patterns, case_sensitive=False, whole_words=False):
     results = []
     if not regexes:
         return results
+    phrases = [str(t).strip() for t in terms if re.search(r"\S\s+\S", str(t).strip())]
     for page in doc:
-        text = page.get_text("text")
-        found = set()
-        for rx in regexes:
-            for m in rx.finditer(text):
-                s = m.group(0).strip()
-                if s and "\n" not in s:
-                    found.add(s)
-        for s in sorted(found, key=len, reverse=True):
-            for quad in page.search_for(s, quads=True):
+        lines = _text_lines(page)
+        seen = []
+
+        def add(text, rect):
+            if rect.is_empty or any((rect & r).get_area() > 0.6 * rect.get_area() for r in seen):
+                return
+            seen.append(rect)
+            results.append({"page": page.number, "text": text, "rect": rect, "frac": visible_frac(page, rect)})
+
+        # Exact: every match is located from the very characters the expression matched, so
+        # "whole words" and the patterns' own boundaries hold for what gets blacked out.
+        for text, boxes in lines:
+            for rx in regexes:
+                for m in rx.finditer(text):
+                    a, b = m.span()
+                    while a < b and text[a].isspace():
+                        a += 1
+                    while b > a and text[b - 1].isspace():
+                        b -= 1
+                    if a == b:
+                        continue
+                    rect = fitz.Rect()
+                    for box in boxes[a:b]:
+                        rect |= box
+                    add(text[a:b], rect)
+        # Phrases that wrap onto the next line are found by MuPDF's own search.
+        for phrase in phrases:
+            for quad in page.search_for(phrase, quads=True):
                 rect = quad.rect
-                if case_sensitive and s not in page.get_textbox(rect + (-1, -1, 1, 1)):
+                if case_sensitive and phrase not in page.get_textbox(rect + (-1, -1, 1, 1)):
                     continue
-                results.append({"page": page.number, "text": s, "rect": rect,
-                                "frac": visible_frac(page, rect)})
+                if whole_words and _touches_word(lines, rect):
+                    continue
+                add(phrase, rect)
     return results
+
+
+def _text_lines(page):
+    """[(text, [character box, ...])] for every line of text on the page."""
+    out = []
+    for block in page.get_text("rawdict", flags=fitz.TEXTFLAGS_TEXT)["blocks"]:
+        for line in block.get("lines", ()):
+            chars = [c for span in line["spans"] for c in span.get("chars", ())]
+            if chars:
+                out.append(("".join(c["c"] for c in chars), [fitz.Rect(c["bbox"]) for c in chars]))
+    return out
+
+
+def _touches_word(lines, rect):
+    """True if ``rect`` starts or ends in the middle of a word."""
+    for text, boxes in lines:
+        inside = [i for i, b in enumerate(boxes)
+                  if rect.x0 - 0.5 <= (b.x0 + b.x1) / 2 <= rect.x1 + 0.5 and rect.y0 <= (b.y0 + b.y1) / 2 <= rect.y1]
+        if not inside:
+            continue
+        first, last = inside[0], inside[-1]
+        if first > 0 and re.match(r"\w", text[first - 1]) and re.match(r"\w", text[first]):
+            return True
+        if last + 1 < len(text) and re.match(r"\w", text[last + 1]) and re.match(r"\w", text[last]):
+            return True
+    return False
 
 
 @tool("redact_pdf", max_files=1)

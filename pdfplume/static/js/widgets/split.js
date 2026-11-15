@@ -137,8 +137,10 @@ export function create(ctx) {
     payload() {
       const id = file().id;
       let options;
-      if (s.tab === 'range' && s.rangeMode === 'custom') options = { mode: 'ranges', ranges: s.ranges, merge: s.merge };
-      else if (s.tab === 'range') options = { mode: 'fixed', every: s.every };
+      if (s.tab === 'range' && s.rangeMode === 'custom') {
+        options = { mode: 'ranges', merge: s.merge, ranges: groups().map((g) => ({ from: g[0] + 1, to: g[g.length - 1] + 1 })) };
+      }
+      else if (s.tab === 'range') options = { mode: 'fixed', every: Math.max(1, Math.round(+s.every || 1)) };
       else if (s.tab === 'pages' && s.pagesMode === 'all') options = { mode: 'all' };
       else if (s.tab === 'pages') options = { mode: 'select', pages: s.pages, merge: s.mergePages };
       else options = { mode: 'size', max_mb: s.maxMb };

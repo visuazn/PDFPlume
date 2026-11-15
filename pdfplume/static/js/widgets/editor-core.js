@@ -49,6 +49,9 @@ export class EditorCore {
     this.pageInfo = pages;
     this.elements = [];
     this.history = [];
+    this.selected = null;
+    this.editingId = null;
+    this.overlays = {};
   }
 
   // -------------------------------------------------------------- layout
@@ -458,6 +461,7 @@ export class EditorCore {
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       const el = st.el;
       if (st.mode === 'move' && !st.moved) this.history.pop();
       if (st.mode === 'create-box' && el.w < 0.01 && el.h < 0.01) {
@@ -478,6 +482,7 @@ export class EditorCore {
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   onKey(e) {
@@ -494,6 +499,7 @@ export class EditorCore {
       const step = e.shiftKey ? 0.01 : 0.002;
       const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
       const el = this.selected;
+      if (!e.repeat) this.snapshot();
       if (el.type === 'line' || el.type === 'arrow') { el.x1 += d[0]; el.x2 += d[0]; el.y1 += d[1]; el.y2 += d[1]; }
       else if (el.type === 'path') el.points = el.points.map(([x, y]) => [x + d[0], y + d[1]]);
       else { el.x += d[0]; el.y += d[1]; }

@@ -11,7 +11,7 @@ import pymupdf as fitz
 from .. import engines
 from ..engines import Cancelled, EngineError
 from ..storage import write_json
-from ..utils import PageRangeError, safe_stem, unique_path, zip_files
+from ..utils import PageRangeError, safe_filename, safe_stem, unique_path, zip_files
 
 log = logging.getLogger("pdfplume.tools")
 
@@ -99,10 +99,11 @@ class ToolContext:
 
     # ---- files -------------------------------------------------------------
     def output_path(self, filename):
-        return unique_path(self.out_dir, filename)
+        # Names can come from the user (merge file name, language codes ...): keep them inside out/.
+        return unique_path(self.out_dir, safe_filename(filename))
 
     def work_path(self, filename):
-        return unique_path(self.work_dir, filename)
+        return unique_path(self.work_dir, safe_filename(filename))
 
     def asset_path(self, filename):
         self.assets_dir.mkdir(exist_ok=True)
@@ -166,6 +167,8 @@ def _finalize(ctx):
     if not ctx.outputs:
         raise ToolError("Nothing was produced. Check the options and try again.")
     outputs = [p for p in ctx.outputs if p.exists()]
+    if not outputs:
+        raise ToolError("Nothing was produced. Check the options and try again.")
     if len(outputs) == 1:
         main = outputs[0]
     else:
@@ -197,6 +200,9 @@ def run_job(slug, inputs, options, job_dir):
         result = {"status": "cancelled", "message": "Cancelled"}
     except (ToolError, EngineError, PageRangeError) as exc:
         result = {"status": "error", "message": str(exc)}
+    except (fitz.FileDataError, fitz.EmptyFileError):
+        result = {"status": "error", "message": "The file is damaged or is not a valid PDF. "
+                                                "Try Repair PDF first."}
     except Exception as exc:  # pragma: no cover - unexpected bugs
         log.error("Tool %s failed:\n%s", slug, traceback.format_exc())
         result = {"status": "error", "message": f"Unexpected error: {exc}"}

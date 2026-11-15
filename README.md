@@ -211,6 +211,7 @@ signed keeps the earlier signatures valid.
 | Variable | Default | Meaning |
 |---|---|---|
 | `PDFPLUME_HOST` / `PDFPLUME_PORT` | `127.0.0.1` / `8765` | Address to listen on. Use `0.0.0.0` to use PDFPlume from other devices in your network |
+| `PDFPLUME_ALLOWED_HOSTS` | – | While listening on `127.0.0.1` only, PDFPlume answers just to `localhost`. List extra host names here (comma separated) if you put it behind a reverse proxy on the same machine |
 | `PDFPLUME_DATA_DIR` | `./data` | Workspace for uploads and results (temporary) and your signing certificates (kept) |
 | `PDFPLUME_FILE_TTL_MINUTES` | `120` | Files older than this are deleted |
 | `PDFPLUME_MAX_UPLOAD_MB` | `1024` | Upload size limit |

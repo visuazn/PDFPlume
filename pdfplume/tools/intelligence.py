@@ -363,6 +363,9 @@ class Translator:
                     out = res.get("translatedText")
                     if isinstance(out, str):
                         out = [out]
+                    if not isinstance(out, list) or len(out) != len(chunk):
+                        raise ToolError("The translation server sent an unexpected answer: "
+                                        f"{str(res.get('error') or res)[:200]}")
                     for src, dst in zip(chunk, out):
                         self.cache[src] = dst
             elif self.engine == "argos":
